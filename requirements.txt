@@ -1,0 +1,24 @@
+fastapi
+uvicorn
+
+# Database
+sqlalchemy
+psycopg2-binary
+
+# Redis
+redis
+
+# Auth / JWT
+python-jose[cryptography]
+
+# Config / Env
+python-dotenv
+pydantic
+email-validator
+pydantic-settings
+
+# Migrations (Phase 4)
+alembic
+
+# Forms / multipart (future-safe)
+python-multipart
