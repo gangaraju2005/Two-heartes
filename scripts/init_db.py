@@ -7,6 +7,7 @@ from models.seat import Seat
 from models.show import Show
 from models.booking import Booking, BookingSeat
 from models.review import Review
+from models.notification import Notification
 import hmac
 import hashlib
 

@@ -13,7 +13,8 @@ from api import (
     public,
     users,
     merchant,
-    reviews
+    reviews,
+    notifications
 )
 
 app = FastAPI(
@@ -42,6 +43,7 @@ app.include_router(payments.router)
 app.include_router(users.router)
 app.include_router(merchant.router)
 app.include_router(reviews.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health")

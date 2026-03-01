@@ -562,5 +562,12 @@ def check_in_booking(
     booking.status = "CHECKED_IN"
     db.commit()
     
+    # Send Notification
+    from services.notification_service import send_checkin_notification
+    show_data = db.query(Movie.title).join(Show).filter(Show.id == booking.show_id).first()
+    movie_title = show_data[0] if show_data else "Movie"
+
+    send_checkin_notification(db, booking.user_id, booking.id, movie_title)
+
     return {"message": "Check-in successful", "booking_id": booking.id}
 

@@ -92,8 +92,100 @@ def confirm_booking(
     # Release Redis locks
     release_seats(booking.show_id, payload.seat_ids)
 
+    # Send Notification
+    from services.notification_service import send_booking_confirmation
+    from models.show import Show
+    from models.movie import Movie
+    show_data = db.query(Movie.title).join(Show).filter(Show.id == booking.show_id).first()
+    movie_title = show_data[0] if show_data else "Movie"
+    
+    send_booking_confirmation(db, booking.user_id, booking.id, movie_title)
+
+    # Notify the merchant (theatre owner)
+    from services.notification_service import send_merchant_booking_notification
+    from models.screen import Screen
+    from models.theatre import Theatre
+    theatre_owner = (
+        db.query(Theatre.owner_id)
+        .join(Screen, Screen.theatre_id == Theatre.id)
+        .join(Show, Show.screen_id == Screen.id)
+        .filter(Show.id == booking.show_id)
+        .first()
+    )
+    if theatre_owner:
+        send_merchant_booking_notification(db, theatre_owner[0], booking.id, movie_title)
+
     return {
         "message": "Booking confirmed",
+        "booking_id": booking.id
+    }
+
+
+from datetime import datetime, timedelta
+
+@router.post("/cancel")
+def cancel_booking(
+    payload: ConfirmBookingRequest,  # Reuse: has booking_id and seat_ids
+    current_user: "User" = Depends(deps.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Cancel a booking if it's at least 1 hour before show time.
+    """
+    booking = db.query(Booking).filter(
+        Booking.id == payload.booking_id,
+        Booking.user_id == current_user.id
+    ).first()
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    if booking.status != "CONFIRMED":
+        raise HTTPException(status_code=400, detail=f"Cannot cancel a booking with status: {booking.status}")
+
+    # Check show time
+    from models.show import Show
+    show = db.query(Show).filter(Show.id == booking.show_id).first()
+
+    if show:
+        now = datetime.now()
+        # Ensure comparison is naive to naive
+        show_time_naive = show.show_time.replace(tzinfo=None)
+        cutoff = show_time_naive - timedelta(hours=1)
+        if now >= cutoff:
+            raise HTTPException(
+                status_code=400,
+                detail="Sorry, cancellation window has passed. You can only cancel up to 1 hour before the show."
+            )
+
+    booking.status = "CANCELLED"
+    db.commit()
+
+    # Notify the merchant
+    from services.notification_service import send_merchant_cancellation_notification
+    from models.screen import Screen
+    from models.theatre import Theatre
+    from models.movie import Movie
+    
+    movie_title = db.query(Movie.title).join(Show, Show.movie_id == Movie.id).filter(Show.id == booking.show_id).first()
+    theatre_owner = (
+        db.query(Theatre.owner_id)
+        .join(Screen, Screen.theatre_id == Theatre.id)
+        .join(Show, Show.screen_id == Screen.id)
+        .filter(Show.id == booking.show_id)
+        .first()
+    )
+    if theatre_owner and movie_title:
+        send_merchant_cancellation_notification(db, theatre_owner[0], booking.id, movie_title[0])
+
+    # Release seats
+    from models.booking import BookingSeat
+    seat_ids = [bs.seat_id for bs in db.query(BookingSeat).filter(BookingSeat.booking_id == booking.id).all()]
+    if seat_ids:
+        release_seats(booking.show_id, seat_ids)
+
+    return {
+        "message": "Booking cancelled successfully",
         "booking_id": booking.id
     }
 
