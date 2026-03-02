@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime, timedelta, date # Added date
+from datetime import datetime, timedelta, date, timezone
+
+# IST timezone offset (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 from core.database import get_db
 from api import deps
@@ -203,7 +206,7 @@ def batch_create_shows(
         for time_str in payload.times:
             try:
                 hours, minutes = map(int, time_str.split(':'))
-                show_time = datetime.combine(base_date, datetime.min.time().replace(hour=hours, minute=minutes))
+                show_time = datetime.combine(base_date, datetime.min.time().replace(hour=hours, minute=minutes, tzinfo=IST))
                 
                 show = Show(
                     movie_id=payload.movie_id,
