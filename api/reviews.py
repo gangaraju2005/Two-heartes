@@ -84,3 +84,36 @@ def create_review(
         comment=review.comment,
         created_at=review.created_at
     )
+
+
+# Separate router for user-scoped review endpoints
+my_reviews_router = APIRouter(prefix="/reviews", tags=["Reviews"])
+
+@my_reviews_router.get("/me")
+def get_my_reviews(
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all reviews by the current user."""
+    from models.movie import Movie
+
+    reviews = (
+        db.query(Review, Movie)
+        .join(Movie, Review.movie_id == Movie.id)
+        .filter(Review.user_id == current_user.id)
+        .order_by(Review.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": r.id,
+            "movie_id": r.movie_id,
+            "movie_title": m.title,
+            "poster_url": m.poster_url,
+            "rating": r.rating,
+            "comment": r.comment,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        }
+        for r, m in reviews
+    ]

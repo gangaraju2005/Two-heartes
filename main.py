@@ -43,6 +43,7 @@ app.include_router(payments.router)
 app.include_router(users.router)
 app.include_router(merchant.router)
 app.include_router(reviews.router)
+app.include_router(reviews.my_reviews_router)
 app.include_router(notifications.router)
 
 
