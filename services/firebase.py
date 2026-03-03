@@ -5,12 +5,23 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize Firebase Admin SDK with project ID
+import os
+
+# Initialize Firebase Admin SDK
 try:
-    firebase_admin.initialize_app(options={
-        'projectId': settings.FIREBASE_PROJECT_ID or 'showgo-d993b',
-    })
-    logger.info("Firebase Admin SDK initialized successfully")
+    # Try to find a service account file in the current directory
+    service_account_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "firebase-service-account.json")
+    
+    if os.path.exists(service_account_path):
+        cred = credentials.Certificate(service_account_path)
+        firebase_admin.initialize_app(cred)
+        logger.info(f"Firebase Admin SDK initialized using certificate: {service_account_path}")
+    else:
+        # Fallback to default credentials (works on Google Cloud or if GOOGLE_APPLICATION_CREDENTIALS env is set)
+        firebase_admin.initialize_app(options={
+            'projectId': settings.FIREBASE_PROJECT_ID or 'showgo-d993b',
+        })
+        logger.info("Firebase Admin SDK initialized using default credentials")
 except ValueError:
     # Already initialized
     pass
