@@ -22,3 +22,9 @@ alembic
 
 # Forms / multipart (future-safe)
 python-multipart
+
+# AWS S3 + SNS (both use boto3)
+boto3
+
+# Firebase Admin
+firebase-admin

@@ -19,18 +19,27 @@ from schemas.auth import LoginRequest, VerifyOTPRequest, UserRole
 from utils.password import get_password_hash, verify_password
 
 @router.post("/request-otp")
-def request_otp(payload: LoginRequest):
+async def request_otp(payload: LoginRequest, db: Session = Depends(get_db)):
     """
-    Send OTP to mobile/email.
+    Send OTP to mobile. Returns is_existing_user flag.
     """
     mobile = payload.mobile
-    # Placeholder – integrate SMS/Email later
     otp = random.randint(100000, 999999)
-    print(f" OTP for {mobile}: {otp}")
+    print(f" Your ShowGO OTP for {mobile}: {otp}")
     OTP_STORE[mobile] = otp
+
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.mobile == mobile).first()
+    is_existing_user = existing_user is not None
+
+    # Send OTP via SMS (AWS SNS)
+    from services.sms import send_otp_sms
+    sms_sent = await send_otp_sms(mobile, otp)
+
     return {
         "message": f"OTP sent to {mobile}",
-        "otp": otp
+        "sms_sent": sms_sent,
+        "is_existing_user": is_existing_user
     }
     
 
@@ -90,6 +99,82 @@ def verify_otp(
         "access_token": access_token,
         "token_type": "bearer",
         "user_role": "ADMIN" if user.is_admin else "USER"
+    }
+
+
+class FirebaseVerifyRequest(BaseModel):
+    id_token: str
+    role: Optional[str] = "USER"
+    password: Optional[str] = None
+
+
+@router.post("/firebase-verify")
+def firebase_verify(
+    payload: FirebaseVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify Firebase ID token from client-side phone auth, create/find user, return JWT.
+    """
+    from services.firebase import verify_firebase_token
+
+    try:
+        decoded = verify_firebase_token(payload.id_token)
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)}")
+
+    phone = decoded.get("phone_number")
+    if not phone:
+        raise HTTPException(status_code=400, detail="No phone number in Firebase token")
+
+    # Normalize: remove +91 prefix for storage consistency
+    mobile = phone
+    if mobile.startswith("+91"):
+        mobile = mobile[3:]
+    elif mobile.startswith("+"):
+        mobile = mobile[1:]
+
+    user = db.query(User).filter(User.mobile == mobile).first()
+
+    role = payload.role
+    is_new_user = user is None
+
+    if not user:
+        is_admin = (role == "ADMIN" or role == UserRole.ADMIN)
+        is_merchant = (role == "MERCHANT" or role == UserRole.MERCHANT)
+
+        hashed_pw = get_password_hash(payload.password) if payload.password else None
+
+        user = User(
+            mobile=mobile,
+            is_verified=True,
+            is_admin=is_admin,
+            is_merchant=is_merchant,
+            password_hash=hashed_pw
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        if (role == "ADMIN" or role == UserRole.ADMIN) and not user.is_admin:
+            raise HTTPException(status_code=403, detail="User exists but is not an admin")
+        if payload.password:
+            user.password_hash = get_password_hash(payload.password)
+            db.commit()
+
+    access_token = create_access_token(subject=str(user.id))
+
+    user_role = "USER"
+    if user.is_admin:
+        user_role = "ADMIN"
+    elif user.is_merchant:
+        user_role = "MERCHANT"
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_role": user_role,
+        "is_new_user": is_new_user
     }
 
 @router.post("/login-password")

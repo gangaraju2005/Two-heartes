@@ -14,7 +14,8 @@ from api import (
     users,
     merchant,
     reviews,
-    notifications
+    notifications,
+    upload
 )
 
 app = FastAPI(
@@ -45,6 +46,7 @@ app.include_router(merchant.router)
 app.include_router(reviews.router)
 app.include_router(reviews.my_reviews_router)
 app.include_router(notifications.router)
+app.include_router(upload.router)
 
 
 @app.get("/health")
