@@ -2,6 +2,8 @@
 
 > **This guide explains how to set up the entire ShowGo project (Backend + Frontend + Merchant) from scratch on a new account.** It covers AWS, Firebase, EAS, RDS, and everything you need.
 
+> ⚠️ **IMPORTANT: This project uses AWS RDS for the database, NOT a local PostgreSQL install.** Never use `localhost` in `DATABASE_URL`. Always use your RDS endpoint (e.g. `showgo-db.abc123.us-east-2.rds.amazonaws.com`).
+
 ---
 
 ## 📂 Project Structure
@@ -53,7 +55,8 @@ Movie-app/
 
 ## 1.2 — Create an RDS PostgreSQL Database
 
-> **RDS = a managed database in the cloud, instead of running PostgreSQL on localhost.**
+> ⚠️ **RDS = a managed database in the cloud. We do NOT use a local PostgreSQL install.**
+> Your backend will connect to this RDS instance instead of `localhost`.
 
 1. Go to [AWS Console](https://console.aws.amazon.com/) → **RDS** → **Create Database**
 2. Choose these settings:
@@ -62,15 +65,47 @@ Movie-app/
    - **Template:** Free tier (if available) or Dev/Test
    - **DB Instance Identifier:** `showgo-db`
    - **Master username:** `postgres`
-   - **Master password:** Choose a strong password (e.g. `MyStr0ngPassw0rd!`)
+   - **Master password:** Choose a strong password (e.g. `MyStr0ngPassw0rd!`) — **write this down!**
    - **Instance class:** `db.t3.micro` (free tier eligible)
    - **Storage:** 20 GB (General Purpose SSD)
    - **VPC:** Same VPC as your EC2 instance
    - **Public access:** **No** (keep it private, only EC2 can access)
-   - **Security Group:** Create/select one that allows port 5432 from your EC2's security group
+   - **Security Group:** See section 1.2.1 below
 
 3. Click **Create Database** and wait 5-10 minutes
 4. Once created, click on it and copy the **Endpoint** (e.g. `showgo-db.abc123.us-east-2.rds.amazonaws.com`)
+
+### 1.2.1 — Configure RDS Security Group
+
+The RDS database must allow connections from your EC2 instance:
+
+1. Go to **EC2** → **Security Groups**
+2. Find the security group attached to your **RDS** instance
+3. Click **Edit inbound rules** → **Add rule**:
+
+   | Type | Port | Source | Purpose |
+   |------|------|--------|---------|
+   | PostgreSQL | 5432 | EC2's Security Group ID (e.g. `sg-0abc123`) | Allow EC2 to connect to RDS |
+
+4. Click **Save rules**
+
+> 💡 **Tip:** Setting the source to your EC2's security group (instead of an IP) means any EC2 instance in that group can connect — even if the IP changes.
+
+### 1.2.2 — Your DATABASE_URL Format
+
+After creating RDS, your `DATABASE_URL` should look like this:
+
+```
+postgresql://postgres:YOUR_PASSWORD@YOUR_RDS_ENDPOINT:5432/moviedb
+```
+
+**Example:**
+```
+postgresql://postgres:MyStr0ngPassw0rd!@showgo-db.abc123.us-east-2.rds.amazonaws.com:5432/moviedb
+```
+
+> ❌ **NEVER use:** `postgresql://postgres:password@localhost:5432/moviedb`
+> ✅ **ALWAYS use:** `postgresql://postgres:password@YOUR_RDS_ENDPOINT:5432/moviedb`
 
 ## 1.3 — Create the Database
 
