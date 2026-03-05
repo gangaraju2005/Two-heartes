@@ -126,6 +126,9 @@ psql -h YOUR_RDS_ENDPOINT -U postgres -p 5432
 # Inside psql:
 CREATE DATABASE moviedb;
 \q
+After that need to seed the data
+source venv/bin/activate
+python3 -m scripts.init_db
 ```
 
 ## 1.4 — Create an S3 Bucket (for Image Storage)
@@ -152,9 +155,9 @@ CREATE DATABASE moviedb;
 }
 ```
 
-## 1.5 — Create an IAM User (for AWS Keys)
+## 1.5 — Create an IAM User or use Root acc (for AWS Keys)
 
-1. Go to [AWS Console](https://console.aws.amazon.com/) → **IAM** → **Users** → **Create User**
+1. Go to [AWS Console](https://console.aws.amazon.com/) → **IAM** → **Users** → **Create User** ( Optional )
 2. **User name:** `showgo-backend`
 3. **Permissions:** Attach these policies:
    - `AmazonS3FullAccess`
