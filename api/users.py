@@ -12,21 +12,7 @@ from models.user import User
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-class UserProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    avatar_url: Optional[str] = None
-
-class UserProfileResponse(BaseModel):
-    id: int
-    name: Optional[str]
-    email: Optional[str]
-    mobile: Optional[str]
-    avatar_url: Optional[str]
-    is_verified: bool
-
-    class Config:
-        from_attributes = True
+from schemas.user import UserResponse, UserUpdateRequest
 
 @router.post("/upload-avatar")
 async def upload_avatar(
@@ -55,15 +41,15 @@ async def upload_avatar(
     
     return {"avatar_url": avatar_url}
 
-@router.get("/profile", response_model=UserProfileResponse)
+@router.get("/profile", response_model=UserResponse)
 def get_user_profile(
     current_user: User = Depends(deps.get_current_user)
 ):
     return current_user
 
-@router.put("/profile", response_model=UserProfileResponse)
+@router.put("/profile", response_model=UserResponse)
 def update_user_profile(
-    payload: UserProfileUpdate,
+    payload: UserUpdateRequest,
     current_user: User = Depends(deps.get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -77,6 +63,10 @@ def update_user_profile(
         current_user.name = payload.name
     if payload.email is not None:
         current_user.email = payload.email
+    if payload.mobile is not None:
+        current_user.mobile = payload.mobile
+    if payload.push_token is not None:
+        current_user.push_token = payload.push_token
     if payload.avatar_url is not None:
         print("SETTING AVATAR URL IN DB OBJECT")
         current_user.avatar_url = payload.avatar_url

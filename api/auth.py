@@ -9,36 +9,65 @@ from models.user import User
 from schemas.user import UserResponse, UserUpdateRequest
 from utils.jwt import create_access_token
 
+from core.config import settings
+from core.redis import redis_client
+
 router = APIRouter(prefix="/auth", tags=["Auth"])
-OTP_STORE = {}
 
 
 
 
-from schemas.auth import LoginRequest, VerifyOTPRequest, UserRole
+from schemas.auth import LoginRequest, VerifyOTPRequest, UserRole, OTPPurpose
 from utils.password import get_password_hash, verify_password
 
 @router.post("/request-otp")
 async def request_otp(payload: LoginRequest, db: Session = Depends(get_db)):
     """
-    Send OTP to mobile. Returns is_existing_user flag.
+    Send OTP to email (primary) or mobile. Returns is_existing_user flag.
+    If purpose is RESET, ensures user exists first.
     """
+    email = payload.email
     mobile = payload.mobile
-    otp = random.randint(100000, 999999)
-    print(f" Your ShowGO OTP for {mobile}: {otp}")
-    OTP_STORE[mobile] = otp
+    purpose = payload.purpose
+    
+    if not email and not mobile:
+        raise HTTPException(status_code=400, detail="Email address is required")
+        
+    identifier = email if email else mobile
 
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.mobile == mobile).first()
+    # Check existence
+    if email:
+        existing_user = db.query(User).filter(User.email == email).first()
+    else:
+        existing_user = db.query(User).filter(User.mobile == mobile).first()
+        
     is_existing_user = existing_user is not None
 
-    # Send OTP via SMS (AWS SNS)
-    from services.sms import send_otp_sms
-    sms_sent = await send_otp_sms(mobile, otp)
+    if purpose == OTPPurpose.RESET and not is_existing_user:
+        raise HTTPException(status_code=404, detail="No account found with this email")
+
+    otp = random.randint(100000, 999999)
+    print(f" Your ShowGO OTP for {identifier} ({purpose}): {otp}")
+    
+    # Store in Redis with expiry
+    redis_client.setex(f"otp:{identifier}", settings.OTP_EXPIRE_SECONDS, str(otp))
+
+    sent_via = None
+    if email:
+        from services.email import send_otp_email
+        success = await send_otp_email(email, otp)
+        if success:
+            sent_via = "email"
+    
+    if not sent_via and mobile:
+        from services.sms import send_otp_sms
+        success = await send_otp_sms(mobile, otp)
+        if success:
+            sent_via = "sms"
 
     return {
-        "message": f"OTP sent to {mobile}",
-        "sms_sent": sms_sent,
+        "message": f"OTP sent to {identifier}" if sent_via else "Failed to send OTP",
+        "sent_via": sent_via,
         "is_existing_user": is_existing_user
     }
     
@@ -49,20 +78,28 @@ def verify_otp(
     payload: VerifyOTPRequest,
     db: Session = Depends(get_db)
 ):
+    email = payload.email
     mobile = payload.mobile
-    otp = payload.otp
+    otp = str(payload.otp)
     role = payload.role
     password = payload.password
     
-    stored_otp = OTP_STORE.get(mobile)
+    if not email and not mobile:
+        raise HTTPException(status_code=400, detail="Email address is required")
+        
+    identifier = email if email else mobile
+    stored_otp = redis_client.get(f"otp:{identifier}")
 
-    if not stored_otp or stored_otp != otp:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+    if not stored_otp or str(stored_otp) != otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
     # OTP verified, remove it
-    OTP_STORE.pop(mobile, None)
+    redis_client.delete(f"otp:{identifier}")
 
-    user = db.query(User).filter(User.mobile == mobile).first()
+    if email:
+        user = db.query(User).filter(User.email == email).first()
+    else:
+        user = db.query(User).filter(User.mobile == mobile).first()
 
     if not user:
         # Create new user with appropriate role
@@ -73,6 +110,7 @@ def verify_otp(
         hashed_pw = get_password_hash(password) if password else None
         
         user = User(
+            email=email,
             mobile=mobile, 
             is_verified=True, 
             is_admin=is_admin, 
@@ -87,80 +125,9 @@ def verify_otp(
         if (role == "ADMIN" or role == UserRole.ADMIN) and not user.is_admin:
              raise HTTPException(status_code=403, detail="User exists but is not an admin")
         
-        # Update password if provided and not set? Or just ignore? 
-        # Let's allow setting it if not set, or updating it (reset flow)
         if password:
              user.password_hash = get_password_hash(password)
              db.commit()
-
-    access_token = create_access_token(subject=str(user.id))
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user_role": "ADMIN" if user.is_admin else "USER"
-    }
-
-
-class FirebaseVerifyRequest(BaseModel):
-    id_token: str
-    role: Optional[str] = "USER"
-    password: Optional[str] = None
-
-
-@router.post("/firebase-verify")
-def firebase_verify(
-    payload: FirebaseVerifyRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Verify Firebase ID token from client-side phone auth, create/find user, return JWT.
-    """
-    from services.firebase import verify_firebase_token
-
-    try:
-        decoded = verify_firebase_token(payload.id_token)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)}")
-
-    phone = decoded.get("phone_number")
-    if not phone:
-        raise HTTPException(status_code=400, detail="No phone number in Firebase token")
-
-    # Normalize: remove +91 prefix for storage consistency
-    mobile = phone
-    if mobile.startswith("+91"):
-        mobile = mobile[3:]
-    elif mobile.startswith("+"):
-        mobile = mobile[1:]
-
-    user = db.query(User).filter(User.mobile == mobile).first()
-
-    role = payload.role
-    is_new_user = user is None
-
-    if not user:
-        is_admin = (role == "ADMIN" or role == UserRole.ADMIN)
-        is_merchant = (role == "MERCHANT" or role == UserRole.MERCHANT)
-
-        hashed_pw = get_password_hash(payload.password) if payload.password else None
-
-        user = User(
-            mobile=mobile,
-            is_verified=True,
-            is_admin=is_admin,
-            is_merchant=is_merchant,
-            password_hash=hashed_pw
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        if (role == "ADMIN" or role == UserRole.ADMIN) and not user.is_admin:
-            raise HTTPException(status_code=403, detail="User exists but is not an admin")
-        if payload.password:
-            user.password_hash = get_password_hash(payload.password)
-            db.commit()
 
     access_token = create_access_token(subject=str(user.id))
 
@@ -173,15 +140,17 @@ def firebase_verify(
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user_role": user_role,
-        "is_new_user": is_new_user
+        "user_role": user_role
     }
+
+
 
 @router.post("/login-password")
 def login_password(
     payload: LoginRequest,
     db: Session = Depends(get_db)
 ):
+    email = payload.email
     mobile = payload.mobile
     password = payload.password
     role = payload.role
@@ -189,7 +158,10 @@ def login_password(
     if not password:
         raise HTTPException(status_code=400, detail="Password is required")
 
-    user = db.query(User).filter(User.mobile == mobile).first()
+    if email:
+        user = db.query(User).filter(User.email == email).first()
+    else:
+        user = db.query(User).filter(User.mobile == mobile).first()
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -256,14 +228,9 @@ def get_current_user_profile(
 
 
 
-class UserProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    avatar_url: Optional[str] = None
-
 @router.put("/me", response_model=UserResponse)
 def update_current_user_profile(
-    payload: UserProfileUpdate,
+    payload: UserUpdateRequest,
     current_user: User = Depends(deps.get_current_user),
     db: Session = Depends(get_db)
 ):

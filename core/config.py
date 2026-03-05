@@ -29,8 +29,13 @@ class Settings(BaseSettings):
 
     # SMS via AWS SNS (reuses same AWS credentials above)
 
-    # Firebase
-    FIREBASE_PROJECT_ID: str = ""
+
+    # SMTP (Email OTP)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SMTP_FROM: str = "noreply@showgo.com"
 
     model_config = {
         "env_file": ".env",

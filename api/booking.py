@@ -96,10 +96,45 @@ def confirm_booking(
     from services.notification_service import send_booking_confirmation
     from models.show import Show
     from models.movie import Movie
-    show_data = db.query(Movie.title).join(Show).filter(Show.id == booking.show_id).first()
-    movie_title = show_data[0] if show_data else "Movie"
+    
+    show = db.query(Show).filter(Show.id == booking.show_id).first()
+    movie_title = db.query(Movie.title).filter(Movie.id == show.movie_id).first()[0] if show else "Movie"
     
     send_booking_confirmation(db, booking.user_id, booking.id, movie_title)
+
+    # Generate and Send PDF Ticket via Email
+    try:
+        if show:
+            from services.ticket import generate_ticket_pdf
+            from services.email import send_ticket_email
+            from models.theatre import Theatre
+            from models.screen import Screen
+            
+            theatre = db.query(Theatre.name).join(Screen).filter(Screen.id == show.screen_id).first()
+            theatre_name = theatre[0] if theatre else "Cinema"
+            
+            # Get seat labels
+            from models.booking import BookingSeat
+            from models.seat import Seat
+            booking_seats = db.query(Seat).join(BookingSeat, BookingSeat.seat_id == Seat.id).filter(BookingSeat.booking_id == booking.id).all()
+            seat_labels = ", ".join([s.seat_number for s in booking_seats])
+            
+            pdf_path = generate_ticket_pdf(
+                booking.id, 
+                movie_title, 
+                theatre_name, 
+                show.show_time.strftime("%Y-%m-%d %H:%M"), 
+                seat_labels, 
+                booking.total_amount
+            )
+            
+            user = db.query(User).filter(User.id == booking.user_id).first()
+            if user and user.email:
+                import asyncio
+                asyncio.create_task(send_ticket_email(user.email, pdf_path, movie_title))
+            
+    except Exception as e:
+        print(f"Failed to generate/send ticket: {e}")
 
     # Notify the merchant (theatre owner)
     from services.notification_service import send_merchant_booking_notification

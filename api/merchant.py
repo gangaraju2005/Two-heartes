@@ -408,6 +408,91 @@ def create_theatre(
     db.refresh(theatre)
     return theatre
 
+@router.put("/theatres/{theatre_id}")
+def update_theatre(
+    theatre_id: int,
+    payload: TheatreCreate,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.is_merchant:
+        raise HTTPException(status_code=403, detail="Not a merchant")
+
+    theatre = db.query(Theatre).filter(
+        Theatre.id == theatre_id,
+        Theatre.owner_id == current_user.id
+    ).first()
+    if not theatre:
+        raise HTTPException(status_code=404, detail="Theatre not found or access denied")
+
+    theatre.name = payload.name
+    theatre.city = payload.city
+    if payload.image_url is not None:
+        theatre.image_url = payload.image_url
+
+    db.commit()
+    db.refresh(theatre)
+    return theatre
+
+@router.delete("/theatres/{theatre_id}")
+def delete_theatre(
+    theatre_id: int,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.is_merchant:
+        raise HTTPException(status_code=403, detail="Not a merchant")
+
+    theatre = db.query(Theatre).filter(
+        Theatre.id == theatre_id,
+        Theatre.owner_id == current_user.id
+    ).first()
+    if not theatre:
+        raise HTTPException(status_code=404, detail="Theatre not found or access denied")
+
+    # Get all screens for this theatre
+    screens = db.query(Screen).filter(Screen.theatre_id == theatre_id).all()
+    screen_ids = [s.id for s in screens]
+
+    if screen_ids:
+        # Check for bookings on future shows in these screens
+        now = datetime.now()
+        future_shows_with_bookings = (
+            db.query(Show)
+            .join(Booking, Booking.show_id == Show.id)
+            .filter(
+                Show.screen_id.in_(screen_ids),
+                Show.show_time >= now,
+                Booking.status.in_(["CONFIRMED", "LOCKED", "CHECKED_IN"])
+            )
+            .count()
+        )
+
+        if future_shows_with_bookings > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete theatre with active bookings on upcoming shows. Cancel the bookings first."
+            )
+
+        # Delete seats for all screens
+        db.query(Seat).filter(Seat.screen_id.in_(screen_ids)).delete(synchronize_session=False)
+
+        # Delete booking_seats for shows in these screens
+        show_ids = [s.id for s in db.query(Show).filter(Show.screen_id.in_(screen_ids)).all()]
+        if show_ids:
+            booking_ids = [b.id for b in db.query(Booking).filter(Booking.show_id.in_(show_ids)).all()]
+            if booking_ids:
+                db.query(BookingSeat).filter(BookingSeat.booking_id.in_(booking_ids)).delete(synchronize_session=False)
+                db.query(Booking).filter(Booking.id.in_(booking_ids)).delete(synchronize_session=False)
+            db.query(Show).filter(Show.id.in_(show_ids)).delete(synchronize_session=False)
+
+        # Delete screens
+        db.query(Screen).filter(Screen.theatre_id == theatre_id).delete(synchronize_session=False)
+
+    db.delete(theatre)
+    db.commit()
+    return {"message": "Theatre deleted successfully"}
+
 @router.post("/screens")
 def create_screen(
     payload: ScreenCreate,
