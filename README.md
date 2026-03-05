@@ -47,14 +47,14 @@ uvicorn main:app --host 0.0.0.0 --reload
 ### 1. EC2 Instance (Web Server)
 1. Launch an **Ubuntu 24.04 LTS** instance (`t2.micro` or `t2.small`).
 2. **Security Group Rules**:
-   - **SSH (22)**: Access for your IP.
+   - **SSH (22)**: Access for your IP Or Allow for all (Optional).
    - **Custom TCP (8000)**: Port for the FastAPI backend.
    - **PostgreSQL (5432)**: Ensure this is allowed if connecting locally (usually restricted to EC2 SG).
 
 ### 2. RDS Instance (PostgreSQL)
 1. Create a **PostgreSQL 15+** database on AWS RDS.
 2. **Connectivity**: Choose the same VPC as your EC2.
-3. **Public Access**: No (Security Best Practice).
+3. **Public Access**: No (Security Best Practice) Or Yes (For Testing).
 4. **RDS Security Group**: Add an inbound rule for **PostgreSQL (5432)** allowing the **EC2 Security Group** as the source.
 5. **Database Name**: `moviedb`.
 
@@ -81,7 +81,7 @@ CREATE DATABASE moviedb;
 ### 3. Setup App & Run
 ```bash
 git clone YOUR_REPO_URL
-cd showgo/backend
+cd <To Repo Folder>
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
