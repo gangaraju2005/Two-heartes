@@ -2,6 +2,8 @@ from sqlalchemy import Column, Integer, ForeignKey, DateTime, Float
 from sqlalchemy.sql import func
 
 from core.database import Base
+from models.movie import Movie # Discovery
+from models.screen import Screen # Discovery
 
 
 class Show(Base):

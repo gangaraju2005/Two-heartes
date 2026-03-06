@@ -2,6 +2,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 from core.database import SessionLocal
 from models.movie import Movie
+from models.user import User # Ensure User is loaded for metadata awareness
 
 def populate_movies():
     db = SessionLocal()

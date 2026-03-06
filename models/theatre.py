@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.sql import func
 
 from core.database import Base
+from models.user import User # Discovery
 
 
 class Theatre(Base):

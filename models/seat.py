@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boo
 from sqlalchemy.sql import func
 
 from core.database import Base
+from models.screen import Screen # Discovery
 
 
 class Seat(Base):
