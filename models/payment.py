@@ -2,7 +2,8 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
 from core.database import Base
-
+from models.user import User # Discovery
+from models.booking import Booking # Discovery
 
 class Payment(Base):
     __tablename__ = "payments"

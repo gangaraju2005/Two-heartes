@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from core.database import Base
-
+from models.theatre import Theatre # Import for relationship discovery
 
 class Screen(Base):
     __tablename__ = "screens"

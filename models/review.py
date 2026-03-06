@@ -3,6 +3,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from core.database import Base
+from models.user import User
+from models.movie import Movie
 
 class Review(Base):
     __tablename__ = "reviews"

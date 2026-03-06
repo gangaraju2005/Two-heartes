@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from core.database import Base
-
+from models.user import User # Discovery
 
 class Notification(Base):
     __tablename__ = "notifications"
