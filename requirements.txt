@@ -20,7 +20,7 @@ ecdsa==0.19.1
 email-validator==2.3.0
 fastapi==0.128.0
 google-crc32c==1.8.0
-expo-server-sdk==2.0.0
+expo-server-sdk==2.2.0
 googleapis-common-protos==1.72.0
 greenlet==3.3.0
 grpcio==1.78.0
