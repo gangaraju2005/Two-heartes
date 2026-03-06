@@ -19,9 +19,9 @@ JWT_EXPIRE_MINUTES=525600
 # Email Delivery (SMTP)
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=587
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-app-password"
-SMTP_FROM="noreply@showgo.com"
+SMTP_USER="karaganagangaraju2005@gmail.com"
+SMTP_PASS="uxklydwdbveeutfo"
+SMTP_FROM="karaganagangaraju2005@gmail.com"
 
 # AWS (for S3 and SNS Notifications)
 AWS_ACCESS_KEY_ID="AKIA..."
