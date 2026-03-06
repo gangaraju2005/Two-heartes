@@ -90,9 +90,47 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ---
 
+## ⚙️ Service Management (systemd)
+
+To run the backend as a background service on EC2, use `systemd`.
+
+### 1. Management Commands
+Manage the `movieapp.service` with these commands:
+- **Restart**: `sudo systemctl restart movieapp.service`
+- **Start**: `sudo systemctl start movieapp.service`
+- **Stop**: `sudo systemctl stop movieapp.service`
+- **Status**: `sudo systemctl status movieapp.service`
+- **View Logs**: `journalctl -u movieapp.service -f`
+
+### 2. Sample Service File
+Create a file at `/etc/systemd/system/movieapp.service`:
+```ini
+[Unit]
+Description=ShowGo FastAPI Backend
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/Movie-app/backend
+Environment="PATH=/home/ubuntu/Movie-app/backend/venv/bin"
+ExecStart=/home/ubuntu/Movie-app/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
 ## 🏗️ Database Initialization & Seeding
 
 Run these scripts in order to set up your tables and initial data:
+
+### 0. Reset Database (DANGEROUS)
+If you need to wipe all existing tables and data for a clean start:
+```bash
+python -m scripts.reset_db
+```
 
 ### 1. Create Tables & Seed Core Users
 This script creates the schema and adds the initial Admin (`admin@test.com`) and Merchant (`merchant@test.com`) accounts.
