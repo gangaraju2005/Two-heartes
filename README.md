@@ -115,5 +115,4 @@ python -m scripts.populate_seats
 - **Email Authentication**: Secure OTP-based login via SMTP.
 - **Seat Locking**: Redis-backed temporary reservations (TTL: 10s).
 - **PDF Tickets**: Automatic ticket generation and email delivery.
-- **Push Notifications**: Integrated Expo Push SDK for mobile alerts.
 - **S3 Image Hosting**: Dynamic uploads for movie posters and user avatars.
